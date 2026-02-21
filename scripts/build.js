@@ -3,11 +3,28 @@ import fs from 'fs';
 
 const parser = new Parser();
 
+// Expanded sources: targeted Google News queries + industry RSS + safety orgs
 const feeds = [
-  'https://news.google.com/rss/search?q=%28automotive+windshield+OR+windscreen+OR+%22auto+glass%22+OR+%22windshield+replacement%22+OR+%22windshield+repair%22+OR+%22ADAS+calibration%22+OR+Safelite+OR+Belron+OR+Pilkington%29&hl=en-US&gl=US&ceid=US:en',
-  'https://glassbytes.com/feed/',
-  'https://www.repairerdrivennews.com/feed/'
+  // Google News targeted queries
+  'https://news.google.com/rss/search?q=%28automotive+windshield+OR+windscreen+OR+%22auto+glass%22+OR+%22windshield+replacement%22+OR+%22windshield+repair%22+OR+%22ADAS+calibration%22%29&hl=en-US&gl=US&ceid=US:en',
+  'https://news.google.com/rss/search?q=%28windshield+recall+OR+windshield+crack+OR+laminated+glass%29&hl=en-US&gl=US&ceid=US:en',
+  'https://news.google.com/rss/search?q=%28Safelite+OR+Belron+OR+Pilkington+OR+NSG+OR+Xinyi+Glass%29+%28windshield+OR+glass%29&hl=en-US&gl=US&ceid=US:en',
+
+  // Industry / trade feeds
+  'https://www.glassbytes.com/feed/',
+  'https://www.agrrmag.com/feed/',
+  'https://www.repairerdrivennews.com/feed/',
+
+  // Safety / testing orgs
+  'https://www.iihs.org/rss/news',
+  // NHTSA site sometimes changes RSS endpoints; keep but ignore errors gracefully
+  'https://www.nhtsa.gov/rss' 
 ];
+
+const relevance = (title = '', link = '') => {
+  const hay = `${title} ${link}`.toLowerCase();
+  return /windshield|windscreen|auto\s*glass|adas|calibration|glassbyte|safelite|belron|pilkington|laminated/.test(hay);
+};
 
 function dedupe(items) {
   const seen = new Set();
@@ -46,21 +63,22 @@ function esc(s='') { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
   }
   const now = new Date();
   const h = (n) => 1000*60*60*n;
-  const cutoffTight = new Date(now.getTime() - h(48)); // prefer last 48h
-  const cutoffLoose = new Date(now.getTime() - h(7*24)); // fallback: 7 days
+  const cutoffTight = new Date(now.getTime() - h(72)); // try last 72h first
+  const cutoffLoose = new Date(now.getTime() - h(14*24)); // fallback to 14 days if quiet
 
   let items = dedupe(all)
     .filter(it => it.date > cutoffTight)
+    .filter(it => relevance(it.title, it.link))
     .sort((a,b) => b.date - a.date);
 
-  if (items.length < 8) {
-    // Not enough within 48h — relax to last 7 days
+  if (items.length < 10) {
     items = dedupe(all)
       .filter(it => it.date > cutoffLoose)
+      .filter(it => relevance(it.title, it.link))
       .sort((a,b) => b.date - a.date);
   }
 
-  items = items.slice(0, 30);
+  items = items.slice(0, 40);
 
   const dateStr = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday:'long', month:'long', day:'numeric', year:'numeric' });
 
@@ -71,7 +89,7 @@ function esc(s='') { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
         <time>${it.date.toLocaleString('en-US', { hour: '2-digit', minute:'2-digit', month:'short', day:'numeric' })}</time>
       </li>`).join('\n');
 
-  const emptyMsg = '<li>No recent headlines found. Please check back later.</li>';
+  const emptyMsg = '<li>No recent headlines matched yet. Please check back soon.</li>';
 
   const html = `<!doctype html>
 <html lang="en">
@@ -107,7 +125,7 @@ function esc(s='') { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
     </ul>
   </main>
   <footer>
-    Sources include Google News and industry feeds. Links open in a new tab.
+    Sources: Google News queries, glassBYTEs, AGRR Magazine, Repairer Driven News, IIHS, NHTSA.
   </footer>
 </body>
 </html>`;
