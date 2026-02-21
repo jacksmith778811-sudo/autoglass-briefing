@@ -4,8 +4,9 @@ import fs from 'fs';
 const parser = new Parser();
 
 const feeds = [
-  'https://news.google.com/rss/search?q=automotive+glass+OR+windshield+replacement+OR+ADAS+calibration&hl=en-US&gl=US&ceid=US:en',
-  'https://glassbytes.com/feed/'
+  'https://news.google.com/rss/search?q=%28automotive+windshield+OR+windscreen+OR+%22auto+glass%22+OR+%22windshield+replacement%22+OR+%22windshield+repair%22+OR+%22ADAS+calibration%22+OR+Safelite+OR+Belron+OR+Pilkington%29&hl=en-US&gl=US&ceid=US:en',
+  'https://glassbytes.com/feed/',
+  'https://www.repairerdrivennews.com/feed/'
 ];
 
 function dedupe(items) {
@@ -44,11 +45,22 @@ function esc(s='') { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
     }
   }
   const now = new Date();
-  const cutoff = new Date(now.getTime() - 1000*60*60*36); // last 36 hours
-  const items = dedupe(all)
-    .filter(it => it.date > cutoff)
-    .sort((a,b) => b.date - a.date)
-    .slice(0, 25);
+  const h = (n) => 1000*60*60*n;
+  const cutoffTight = new Date(now.getTime() - h(48)); // prefer last 48h
+  const cutoffLoose = new Date(now.getTime() - h(7*24)); // fallback: 7 days
+
+  let items = dedupe(all)
+    .filter(it => it.date > cutoffTight)
+    .sort((a,b) => b.date - a.date);
+
+  if (items.length < 8) {
+    // Not enough within 48h — relax to last 7 days
+    items = dedupe(all)
+      .filter(it => it.date > cutoffLoose)
+      .sort((a,b) => b.date - a.date);
+  }
+
+  items = items.slice(0, 30);
 
   const dateStr = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday:'long', month:'long', day:'numeric', year:'numeric' });
 
@@ -59,13 +71,15 @@ function esc(s='') { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
         <time>${it.date.toLocaleString('en-US', { hour: '2-digit', minute:'2-digit', month:'short', day:'numeric' })}</time>
       </li>`).join('\n');
 
+  const emptyMsg = '<li>No recent headlines found. Please check back later.</li>';
+
   const html = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Automotive Glass Daily Briefing</title>
-  <meta name="description" content="Curated daily headlines on automotive glass: windshield replacement, ADAS calibration, supply chain, and industry news." />
+  <meta name="description" content="Curated headlines on automotive glass: windshield replacement, ADAS calibration, supply chain, and industry news." />
   <style>
     :root { color-scheme: light dark; }
     body { margin: 0; font: 16px/1.5 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
@@ -89,7 +103,7 @@ function esc(s='') { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
   </header>
   <main>
     <ul>
-      ${list || '<li>No fresh headlines in the last day. Check back tomorrow.</li>'}
+      ${list || emptyMsg}
     </ul>
   </main>
   <footer>
