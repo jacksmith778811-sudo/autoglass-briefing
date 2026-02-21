@@ -1,0 +1,30 @@
+name: Update Daily Briefing
+on:
+  schedule:
+    - cron: '0 12 * * *' # 12:00 UTC daily (4am PT / 5am PDT approx.)
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci || npm i
+      - run: npm run build
+      - name: Commit updates
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git add docs/index.html
+            git commit -m "chore: refresh daily briefing"
+            git push
+          else
+            echo "No changes to commit"
+          fi

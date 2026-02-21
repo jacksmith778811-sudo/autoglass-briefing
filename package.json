@@ -1,0 +1,13 @@
+{
+  "name": "autoglass-briefing",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.js"
+  },
+  "dependencies": {
+    "rss-parser": "^3.13.0",
+    "node-fetch": "^3.3.2"
+  }
+}
